@@ -1,60 +1,87 @@
 import streamlit as st
-import joblib
 import pandas as pd
-import numpy as np
+import joblib
+from PIL import Image
 
-# Load model, encoder, and feature names
+st.set_page_config(page_title="Mental Health Predictor", page_icon="🧠")
+st.title("🧠 Mental Health Support Predictor")
+st.write("_Fill the confidential form below to assess your mental health support need._")
+
+# Load model and features
 model = joblib.load('mental_health_model.pkl')
-encoder = joblib.load('encoder.pkl')  # OneHotEncoder for work_interfere
 feature_names = joblib.load('feature_names.pkl')
 
-st.title("Mental Health Predictor")
-st.write("Fill the form to predict your mental health support need.")
+# Styled form layout
+with st.form("prediction_form"):
+    col1, col2 = st.columns(2)
+    with col1:
+        age = st.slider("🎂 Age", 18, 65, 30)
+        gender = st.selectbox("⚧️ Gender", ["Male", "Female", "Other"])
+        self_employed = st.selectbox("💼 Self-employed?", ["Yes", "No"])
+        family_history = st.selectbox("👨‍👩‍👧 Family history of mental illness?", ["Yes", "No"])
+        work_interfere = st.selectbox("📉 Work interference due to mental health", ["Never", "Rarely", "Sometimes", "Often", "Don’t know"])
+        no_employees = st.selectbox("🏢 Company size", ['1-5', '6-25', '26-100', '100-500', '500-1000', 'More than 1000'])
+        remote_work = st.selectbox("🏠 Work remotely?", ["Yes", "No"])
+        tech_company = st.selectbox("💻 Tech company?", ["Yes", "No"])
+    
+    with col2:
+        benefits = st.selectbox("🧾 Mental health benefits offered?", ["Yes", "No", "Don't know"])
+        care_options = st.selectbox("🩺 Aware of care options?", ["Yes", "No", "Not sure"])
+        wellness_program = st.selectbox("🏋️‍♂️ Wellness programs available?", ["Yes", "No", "Don't know"])
+        seek_help = st.selectbox("🙋 Encouraged to seek help?", ["Yes", "No", "Don't know"])
+        anonymity = st.selectbox("🕶️ Anonymity guaranteed?", ["Yes", "No", "Don't know"])
+        leave = st.selectbox("📅 Ease of taking leave", ["Very easy", "Somewhat easy", "Don't know", "Somewhat difficult", "Very difficult"])
+        mental_health_consequence = st.selectbox("🧠 Consequences for mental health disclosure?", ["Yes", "No", "Maybe"])
+        phys_health_consequence = st.selectbox("💪 Consequences for physical health disclosure?", ["Yes", "No", "Maybe"])
+        coworkers = st.selectbox("👥 Talk to coworkers?", ["Yes", "No", "Some of them"])
+        supervisor = st.selectbox("👨‍💼 Talk to supervisor?", ["Yes", "No", "Some of them"])
 
-# Input fields (add any other features your model uses!)
-age = st.slider('Age', 18, 65, 30)
-gender = st.selectbox('Gender', ['Male', 'Female', 'Other'])
-family_history = st.selectbox('Family History of Mental Illness?', ['Yes', 'No'])
-work_interfere = st.selectbox('Work Interference', ['Never', 'Rarely', 'Sometimes', 'Often', "Don’t know"])
+    col3, col4 = st.columns(2)
+    with col3:
+        mental_health_interview = st.selectbox("🧠 Discuss mental health in interview?", ["Yes", "No", "Maybe"])
+        phys_health_interview = st.selectbox("💪 Discuss physical health in interview?", ["Yes", "No", "Maybe"])
+    with col4:
+        mental_vs_physical = st.selectbox("⚖️ Importance of mental vs physical health", ["Yes", "No", "Don't know"])
+        obs_consequence = st.selectbox("👀 Seen mental health consequences at work?", ["Yes", "No"])
+        country = st.selectbox("🌍 Country", ["United States", "India", "Canada", "United Kingdom", "Germany", "Others"])
 
-# Step 1: Prepare input dataframe
-input_df = pd.DataFrame({
-    'Age': [age],
-    'Gender': [gender],
-    'family_history': [family_history],
-    'work_interfere': [work_interfere],
-    # Add other inputs as needed
-})
+    submitted = st.form_submit_button("🔍 Predict")
 
-# Step 2: Label encode binary columns with the same mapping as training
+if submitted:
+    input_dict = {
+        'Age': age,
+        'Gender': gender,
+        'self_employed': self_employed,
+        'family_history': family_history,
+        'work_interfere': work_interfere,
+        'no_employees': no_employees,
+        'remote_work': remote_work,
+        'tech_company': tech_company,
+        'benefits': benefits,
+        'care_options': care_options,
+        'wellness_program': wellness_program,
+        'seek_help': seek_help,
+        'anonymity': anonymity,
+        'leave': leave,
+        'mental_health_consequence': mental_health_consequence,
+        'phys_health_consequence': phys_health_consequence,
+        'coworkers': coworkers,
+        'supervisor': supervisor,
+        'mental_health_interview': mental_health_interview,
+        'phys_health_interview': phys_health_interview,
+        'mental_vs_physical': mental_vs_physical,
+        'obs_consequence': obs_consequence,
+        'Country': country
+    }
 
-gender_map = {'Male': 1, 'Female': 0, 'Other': 2}  # as per LabelEncoder results, double-check your mappings!
-family_history_map = {'Yes': 1, 'No': 0}
+    input_df = pd.DataFrame([input_dict])
+    input_df_encoded = pd.get_dummies(input_df)
 
-input_df['Gender'] = input_df['Gender'].map(gender_map)
-input_df['family_history'] = input_df['family_history'].map(family_history_map)
+    for col in feature_names:
+        if col not in input_df_encoded:
+            input_df_encoded[col] = 0
+    input_df_encoded = input_df_encoded[feature_names]
 
-# Step 3: One-hot encode work_interfere using loaded encoder
-# The encoder expects 2D array input, so reshape appropriately
-work_interfere_encoded = encoder.transform(input_df[['work_interfere']])
-work_interfere_df = pd.DataFrame(
-    work_interfere_encoded, 
-    columns=[f'work_interfere_{cat}' for cat in encoder.categories_[0]]
-)
-
-# Drop original 'work_interfere' and concat encoded
-input_df = input_df.drop('work_interfere', axis=1)
-input_df = pd.concat([input_df.reset_index(drop=True), work_interfere_df], axis=1)
-
-# Step 4: Add any missing columns your model expects but input does not have
-for col in feature_names:
-    if col not in input_df.columns:
-        input_df[col] = 0  # Fill missing columns with 0
-
-# Step 5: Reorder columns to match training
-input_df = input_df[feature_names]
-
-# Step 6: Predict
-if st.button('Predict'):
-    prediction = model.predict(input_df)[0]
-    st.success(f"Prediction: {'Needs Support' if prediction == 1 else 'No Immediate Need'}")
+    prediction = model.predict(input_df_encoded)[0]
+    result = "🟢 No Immediate Support Needed" if prediction == 0 else "🔴 Likely Needs Mental Health Support"
+    st.markdown(f"## Prediction: {result}")
